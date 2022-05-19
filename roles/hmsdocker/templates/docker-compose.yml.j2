@@ -12,7 +12,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "traefik_net"
+      - "proxy"
 {% if container_expose_ports or not hms_docker_container_map['traefik']['enabled'] %}
     ports:
       - 9000:9000
@@ -39,7 +39,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "traefik_net"
+      - "proxy"
     command: --cleanup --schedule "{{ container_auto_update_schedule }}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -48,7 +48,7 @@ services:
 {% if hms_docker_container_map['traefik']['enabled'] %}
   # Traefik container, loadbalancer/reverse proxy/ssl
   traefik:
-    image: traefik:v2.6.1
+    image: traefik:v2.6
     container_name: traefik
     restart: {{ container_restart_policy }}
     logging:
@@ -58,7 +58,6 @@ services:
     ports:
       - 80:80
       - 443:443
-      - 8080:8080
     environment:
       - TZ={{ container_timezone }}
       - PUID={{ container_uid }}
@@ -69,19 +68,36 @@ services:
 {% endfor %}
 {% endif %}
     networks:
-      - "traefik_net"
+      - "proxy"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - {{ hms_docker_apps_path }}/traefik/config/traefik.yml:/etc/traefik/traefik.yml
       - {{ hms_docker_apps_path }}/traefik/config/certs/:/certs/
 {% if hms_docker_container_map['traefik']['traefik'] %}
     labels:
-      - traefik.enable=true
-      - traefik.http.services.traefik-{{ project_name }}.loadbalancer.server.port=8080
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`traefik.{{ traefik_ssl_dns_provider_zone }}`)"
+      - "traefik.http.routers.api.entryPoints=https"
+      - "traefik.http.routers.api.service=api@internal"
       - "traefik.http.middlewares.internal-ipwhitelist.ipwhitelist.sourcerange=127.0.0.1/32, {{ traefik_subnet_allow_list }}"
       - "traefik.http.middlewares.external-ipwhitelist.ipwhitelist.sourcerange=0.0.0.0/0"
-      - "traefik.http.routers.traefik-{{ project_name }}.middlewares=internal-ipwhitelist"
+      - "traefik.http.routers.traefik.middlewares=internal-ipwhitelist"
 {% endif %}
+{% endif %}
+
+{% if hms_docker_container_map['dockersocket']['enabled'] %}
+  dockersocket:
+    container_name: dockersocket
+    image: tecnativa/docker-socket-proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      CONTAINERS: 1
+      POST: 0
+    privileged: true
+    networks:
+      - "proxy"
+    restart: {{ container_restart_policy }}
 {% endif %}
 
 {% if hms_docker_container_map['nzbget']['enabled'] %}
@@ -95,8 +111,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "traefik_net"
-      - "download_net"
+      - "proxy"
     environment:
       - PUID={{ container_uid }}
       - PGID={{ container_gid }}
@@ -129,7 +144,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "download_net"
+      - "proxy"
     cap_add:
       - NET_ADMIN
 {% if container_expose_ports or not hms_docker_container_map['traefik']['enabled'] %}
@@ -182,8 +197,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "download_net"
-      - "traefik_net"
+      - "proxy"
     depends_on:
       - transmission
     environment:
@@ -214,8 +228,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "download_net"
-      - "traefik_net"
+      - "proxy"
     environment:
       - PUID={{ container_uid }}
       - PGID={{ container_gid }}
@@ -245,8 +258,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "download_net"
-      - "traefik_net"
+      - "proxy"
     environment:
       - PUID={{ container_uid }}
       - PGID={{ container_gid }}
@@ -276,8 +288,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "download_net"
-      - "traefik_net"
+      - "proxy"
     environment:
       - PUID={{ container_uid }}
       - PGID={{ container_gid }}
@@ -320,8 +331,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "download_net"
-      - "traefik_net"
+      - "proxy"
     environment:
       - PUID={{ container_uid }}
       - PGID={{ container_gid }}
@@ -364,7 +374,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "traefik_net"
+      - "proxy"
 {% if container_expose_ports or not hms_docker_container_map['traefik']['enabled'] %}
     ports:
       - 6767:6767
@@ -400,9 +410,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "media_net"
-      - "download_net"
-      - "traefik_net"
+      - "proxy"
     environment:
       - PUID={{ container_uid }}
       - PGID={{ container_gid }}
@@ -436,8 +444,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "media_net"
-      - "traefik_net"
+      - "proxy"
     ports:
       - 32400:32400/tcp
       - 3005:3005/tcp
@@ -490,8 +497,7 @@ services:
       options:
         max-size: 10m
     networks:
-      - "media_net"
-      - "traefik_net"
+      - "proxy"
     environment:
       - PUID={{ container_uid }}
       - PGID={{ container_gid }}
@@ -536,12 +542,6 @@ services:
 {% endif %}
 
 networks:
-  "download_net":
-    driver: bridge
-    attachable: false
-  "media_net":
-    driver: bridge
-    attachable: false
-  "traefik_net":
+  "proxy":
     driver: bridge
     attachable: false

@@ -247,6 +247,9 @@ traefik_ssl_enabled: no
 # If SSL is enabled and this is set to yes, check to make sure the generated certificate is issued from the "STAGING" certificate authority before changing this to "no"
 traefik_ssl_use_letsencrypt_staging_url: yes
 
+# Enable the file provider
+traefik_file_provider: yes
+
 # The DNS provider to use for SSL generation, check this for supported providers: https://doc.traefik.io/traefik/https/acme/#providers
 traefik_ssl_dns_provider_code: ""
 
@@ -267,6 +270,9 @@ traefik_ssl_dns_resolver_2: "1.0.0.1"
 
 # Required for Let's Encrypt, the email address to use when generating your SSL certificate
 traefik_ssl_letsencrypt_email: ""
+
+# Allows for insecure backend connections to apps that might default to ssl connections without valid certs
+traefik_insecure_skip: "true"
 
 # The Traefik log level, helpful for troubleshooting SSL issues // default: "INFO"
 traefik_log_level: "INFO"
@@ -346,6 +352,10 @@ hms_docker_container_map:
     enabled: yes
     directory: yes
     traefik: yes
+  dockersocket:
+    enabled: yes
+    directory: no
+    traefik: no
   sonarr:
     enabled: yes
     directory: yes

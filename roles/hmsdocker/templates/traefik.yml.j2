@@ -1,6 +1,9 @@
 global:
-  checkNewVersion: false
+  checkNewVersion: true
   sendAnonymousUsage: false
+
+serversTransport:
+  insecureSkipVerify: "{{ traefik_insecure_skip }}"
 
 log:
   level: "{{ traefik_log_level }}"
@@ -12,15 +15,41 @@ api:
 entryPoints:
   web:
     address: :80
+    forwardedHeaders:
+      trustedIPs: &trustedIps
+        - 173.245.48.0/20
+        - 103.21.244.0/22
+        - 103.22.200.0/22
+        - 103.31.4.0/22
+        - 141.101.64.0/18
+        - 108.162.192.0/18
+        - 190.93.240.0/20
+        - 188.114.96.0/20
+        - 197.234.240.0/22
+        - 198.41.128.0/17
+        - 162.158.0.0/15
+        - 104.16.0.0/12
+        - 172.64.0.0/13
+        - 131.0.72.0/22
+        - 2400:cb00::/32
+        - 2606:4700::/32
+        - 2803:f800::/32
+        - 2405:b500::/32
+        - 2405:8100::/32
+        - 2a06:98c0::/29
+        - 2c0f:f248::/32
+        - 172.18.0.0/16
 {% if traefik_ssl_enabled %}
     http:
       redirections:
         entryPoint:
-          to: websecure
+          to: https
           scheme: https
 
-  websecure:
+  https:
     address: :443
+    forwardedHeaders:
+      trustedIPs: *trustedIps
     http:
       tls:
         certResolver: letsencrypt
@@ -28,6 +57,9 @@ entryPoints:
           - main: "{{ traefik_ssl_dns_provider_zone }}"
             sans:
               - "*.{{ traefik_ssl_dns_provider_zone }}"
+      middlewares:
+        - securityHeaders@file
+        - gzip@file
 
 certificatesResolvers:
   letsencrypt:
@@ -47,11 +79,22 @@ certificatesResolvers:
 {% endif %}
 
 providers:
+  providersThrottleDuration: 2s
+{% if traefik_file_provider %}
+  file:
+    filename: /etc/traefik/fileConfig.yml
+    watch: true
+{% endif %}  
   docker:
-    network: "{{ project_name }}_traefik_net"
-    endpoint: unix:///var/run/docker.sock
+    network: "proxy"
     exposedByDefault: false
     defaultRule: {% raw %}Host(`{{if index .Labels "com.docker.compose.service" }}{{ index .Labels "com.docker.compose.service" }}{% endraw %}.{{ hms_docker_domain }}{% raw %}{{else}}{{ trimPrefix `/` .Name }}{% endraw %}.{{ hms_docker_domain }}{% raw %}{{end}}`){% endraw %}
+{% if hms_docker_container_map['dockersocket']['enabled'] %}
+    endpoint: "tcp://dockersocket:2375"
+{% else %}
+    endpoint: unix:///var/run/docker.sock
+{% endif %}
+
 
 {% if traefik_pilot_token %}
 pilot:

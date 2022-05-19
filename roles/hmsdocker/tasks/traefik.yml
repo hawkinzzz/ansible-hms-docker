@@ -6,6 +6,14 @@
     mode: 0644
     group: docker
     backup: yes
+
+- name: Ensure Traefik config.
+  template:
+    src: fileConfig.yml.j2
+    dest: "{{ hms_docker_apps_path }}/traefik/config/fileConfig.yml"
+    mode: 0644
+    group: docker
+    backup: yes
   notify: restart traefik
 
 - name: Ensure Traefik certs directory
